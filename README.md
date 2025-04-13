@@ -8,7 +8,9 @@ This is a code generation tool to generate following methods for the specified t
 
 The target use case when you have large amount of constants of a given type, you don't need to write these methods manually. 
 
-By default, the marshalled text is the lower case of constant name, it could be overridden by having a line comment with format: `//alias:"<new_name>"`.
+The generated unmarshal function could optionally include fuzzy match so that it could accommodate input that includes typo, it uses the `github.com/agext/levenshtein` for the fuzzy match.
+
+By default, the marshall/unmarshal text is the constant name, it could be overridden by having a line comment with format: `to:"<new_marshal_text>" from:"<new_unmarhsal_text>"`.
 
 Optionally a external transformer could be specified for custom constant name transform logic. 
 
@@ -22,19 +24,21 @@ package color
 type Color int
 
 const (
-	ColorRed Color = iota //alias:"red"
-	ColorBlue
+	ColorRed  Color = iota //to:"red" from:"hongse"
+	ColorBlue              //to:"lanse"
 	ColorYellow
 )
 ```
-
-2. run `shouchangen -s input.go -t Color -o output.go`
-
-3. it generates output.go:
+2. generate code via command, include fuzzy: `shouchangen -s testdata/example.go -t Color --fuzzy`
 ```
 package color
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/agext/levenshtein"
+
+)
 
 func (val Color) String() string {
 	r,err:=val.MarshalText()
@@ -48,7 +52,7 @@ func (val Color) MarshalText() (text []byte, err error) {
 	switch val {
 	 
 	case ColorBlue:
-		return []byte("colorblue"),nil
+		return []byte("lanse"),nil
 	 
 	case ColorRed:
 		return []byte("red"),nil
@@ -60,24 +64,42 @@ func (val Color) MarshalText() (text []byte, err error) {
 	return nil, fmt.Errorf("unknown value %#v", val)
 }
 
+var unmarshalMap = map[string]Color {
+	 
+	"ColorBlue": ColorBlue,
+	 
+	"ColorYellow": ColorYellow,
+	 
+	"hongse": ColorRed,
+	
+
+}
+
 func (val *Color) UnmarshalText(text []byte) error {
 	input := string(text)
-	switch input {
-	 
-	case "colorblue":
-		*val=ColorBlue
-	 
-	case "red":
-		*val=ColorRed
-	 
-	case "coloryellow":
-		*val=ColorYellow
-	
-	default:
-		return fmt.Errorf("failed to parse %v into Color", input)
+	if r,ok:= unmarshalMap[input];ok {
+	    *val = r
+		return nil
 	}
-	return nil
+	
+	var maxSimilarity float64 = 0.6
+	foundKey:=""
+	for key :=range unmarshalMap {
+		sim:=levenshtein.Similarity(key, input, nil)
+		if sim>=maxSimilarity {
+			foundKey = key
+			maxSimilarity = sim
+		}
+	}
+	if foundKey!="" {
+		*val = unmarshalMap[foundKey]
+		return nil
+	}
+	
+	
+	return fmt.Errorf("%s is not a valid Color",input)
 }
+	
 		
 ```
 ## External Transformer

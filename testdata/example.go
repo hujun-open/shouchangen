@@ -3,7 +3,7 @@ package color
 type Color int
 
 const (
-	ColorRed Color = iota //alias:"red"
-	ColorBlue
+	ColorRed  Color = iota //to:"red" from:"hongse"
+	ColorBlue              //to:"lanse"
 	ColorYellow
 )
